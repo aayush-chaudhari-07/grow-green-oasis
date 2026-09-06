@@ -1,0 +1,95 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 80 20% 97%;
+    --foreground: 150 30% 10%;
+
+    --card: 80 15% 95%;
+    --card-foreground: 150 30% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 150 30% 10%;
+
+    --primary: 142 50% 28%;
+    --primary-foreground: 80 20% 97%;
+
+    --secondary: 80 25% 90%;
+    --secondary-foreground: 150 30% 15%;
+
+    --muted: 80 15% 92%;
+    --muted-foreground: 150 10% 45%;
+
+    --accent: 45 90% 55%;
+    --accent-foreground: 45 90% 15%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 140 15% 85%;
+    --input: 140 15% 85%;
+    --ring: 142 50% 28%;
+
+    --radius: 0.75rem;
+
+    --leaf: 142 60% 40%;
+    --leaf-light: 120 40% 75%;
+    --leaf-dark: 150 45% 20%;
+    --earth: 30 30% 40%;
+    --cream: 45 30% 95%;
+    --gold: 45 90% 55%;
+    --gold-dark: 40 80% 40%;
+
+    --font-display: 'Playfair Display', serif;
+    --font-body: 'Inter', sans-serif;
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-body);
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+  }
+}
+
+@layer utilities {
+  .text-gradient-green {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, hsl(var(--leaf)) 0%, hsl(var(--primary)) 100%);
+  }
+  .bg-gradient-hero {
+    background: linear-gradient(135deg, hsl(var(--leaf-dark)) 0%, hsl(var(--primary)) 50%, hsl(var(--leaf)) 100%);
+  }
+  .bg-gradient-gold {
+    background: linear-gradient(135deg, hsl(var(--gold)) 0%, hsl(var(--gold-dark)) 100%);
+  }
+  .shadow-plant {
+    box-shadow: 0 10px 40px -10px hsl(var(--primary) / 0.25);
+  }
+  .shadow-gold {
+    box-shadow: 0 4px 20px -4px hsl(var(--gold) / 0.4);
+  }
+}
+
+html {
+  scroll-behavior: smooth;
+}
