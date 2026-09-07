@@ -36,6 +36,7 @@ router.get('/wishlist', authenticateToken, (req: AuthRequest, res: Response) => 
 
     res.json({ items });
   } catch (err: any) {
+    console.error('[API Route Error] GET /wishlist:', err);
     res.status(500).json({ error: err.message || 'Failed to fetch wishlist' });
   }
 });
@@ -47,7 +48,7 @@ router.post('/wishlist/toggle', authenticateToken, (req: AuthRequest, res: Respo
       return res.status(401).json({ error: 'Authentication required' });
     }
 
-    const { plantId } = req.body;
+    const { plantId } = req.body || {};
     if (!plantId) {
       return res.status(400).json({ error: 'Plant ID is required' });
     }
@@ -63,6 +64,7 @@ router.post('/wishlist/toggle', authenticateToken, (req: AuthRequest, res: Respo
       return res.json({ message: 'Added to wishlist', inWishlist: true });
     }
   } catch (err: any) {
+    console.error('[API Route Error] POST /wishlist/toggle:', err);
     res.status(500).json({ error: err.message || 'Failed to update wishlist' });
   }
 });
@@ -78,6 +80,7 @@ router.delete('/wishlist/remove/:plantId', authenticateToken, (req: AuthRequest,
     db.prepare('DELETE FROM wishlist WHERE user_id = ? AND plant_id = ?').run(req.user.id, plantId);
     res.json({ message: 'Item removed from wishlist', inWishlist: false });
   } catch (err: any) {
+    console.error('[API Route Error] DELETE /wishlist/remove/:plantId:', err);
     res.status(500).json({ error: err.message || 'Failed to remove from wishlist' });
   }
 });

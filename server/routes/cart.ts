@@ -67,6 +67,7 @@ router.get('/cart', optionalAuth, (req: AuthRequest, res: Response) => {
     const cartData = fetchCartResponse(key);
     res.json(cartData);
   } catch (err: any) {
+    console.error('[API Route Error] GET /cart:', err);
     res.status(500).json({ error: err.message || 'Failed to fetch cart' });
   }
 });
@@ -74,7 +75,7 @@ router.get('/cart', optionalAuth, (req: AuthRequest, res: Response) => {
 // POST /api/cart/add
 router.post('/cart/add', optionalAuth, (req: AuthRequest, res: Response) => {
   try {
-    const { plantId, quantity = 1 } = req.body;
+    const { plantId, quantity = 1 } = req.body || {};
     const parsedQty = Math.max(1, parseInt(quantity, 10) || 1);
 
     if (!plantId) {
@@ -112,6 +113,7 @@ router.post('/cart/add', optionalAuth, (req: AuthRequest, res: Response) => {
     const updatedCart = fetchCartResponse(key);
     res.json({ message: 'Item added to cart', ...updatedCart });
   } catch (err: any) {
+    console.error('[API Route Error] POST /cart/add:', err);
     res.status(500).json({ error: err.message || 'Failed to add item to cart' });
   }
 });
@@ -119,7 +121,7 @@ router.post('/cart/add', optionalAuth, (req: AuthRequest, res: Response) => {
 // PUT /api/cart/update
 router.put('/cart/update', optionalAuth, (req: AuthRequest, res: Response) => {
   try {
-    const { plantId, quantity } = req.body;
+    const { plantId, quantity } = req.body || {};
     if (!plantId || quantity === undefined) {
       return res.status(400).json({ error: 'Plant ID and quantity are required' });
     }
@@ -138,6 +140,7 @@ router.put('/cart/update', optionalAuth, (req: AuthRequest, res: Response) => {
     const updatedCart = fetchCartResponse(key);
     res.json({ message: 'Cart updated', ...updatedCart });
   } catch (err: any) {
+    console.error('[API Route Error] PUT /cart/update:', err);
     res.status(500).json({ error: err.message || 'Failed to update cart' });
   }
 });
@@ -149,6 +152,7 @@ router.delete('/cart/clear', optionalAuth, (req: AuthRequest, res: Response) => 
     db.prepare(`DELETE FROM cart_items WHERE ${key.field} = ?`).run(key.value);
     res.json({ message: 'Cart cleared', items: [], totalAmount: 0 });
   } catch (err: any) {
+    console.error('[API Route Error] DELETE /cart/clear:', err);
     res.status(500).json({ error: err.message || 'Failed to clear cart' });
   }
 });
@@ -164,6 +168,7 @@ router.delete('/cart/remove/:plantId', optionalAuth, (req: AuthRequest, res: Res
     const updatedCart = fetchCartResponse(key);
     res.json({ message: 'Item removed from cart', ...updatedCart });
   } catch (err: any) {
+    console.error('[API Route Error] DELETE /cart/remove/:plantId:', err);
     res.status(500).json({ error: err.message || 'Failed to remove item' });
   }
 });
@@ -184,6 +189,7 @@ router.delete('/cart/:plantId', optionalAuth, (req: AuthRequest, res: Response) 
     const updatedCart = fetchCartResponse(key);
     res.json({ message: 'Item removed from cart', ...updatedCart });
   } catch (err: any) {
+    console.error('[API Route Error] DELETE /cart/:plantId:', err);
     res.status(500).json({ error: err.message || 'Failed to remove item' });
   }
 });

@@ -20,6 +20,7 @@ router.get('/user/profile', authenticateToken, (req: AuthRequest, res: Response)
 
     res.json({ user, addresses });
   } catch (err: any) {
+    console.error('[API Route Error] GET /user/profile:', err);
     res.status(500).json({ error: err.message || 'Failed to fetch user profile' });
   }
 });
@@ -31,20 +32,21 @@ router.put('/user/profile', authenticateToken, (req: AuthRequest, res: Response)
       return res.status(401).json({ error: 'Authentication required' });
     }
 
-    const { name, phone } = req.body;
-    if (!name || !name.trim()) {
+    const { name, phone } = req.body || {};
+    if (!name || !String(name).trim()) {
       return res.status(400).json({ error: 'Name is required' });
     }
 
     db.prepare('UPDATE users SET name = ?, phone = ? WHERE id = ?').run(
-      name.trim(),
-      phone ? phone.trim() : null,
+      String(name).trim(),
+      phone ? String(phone).trim() : null,
       req.user.id
     );
 
     const user = db.prepare('SELECT id, name, email, phone, role, created_at FROM users WHERE id = ?').get(req.user.id);
     res.json({ message: 'Profile updated successfully', user });
   } catch (err: any) {
+    console.error('[API Route Error] PUT /user/profile:', err);
     res.status(500).json({ error: err.message || 'Failed to update profile' });
   }
 });
@@ -59,6 +61,7 @@ router.get('/user/addresses', authenticateToken, (req: AuthRequest, res: Respons
     const addresses = db.prepare('SELECT * FROM addresses WHERE user_id = ? ORDER BY is_default DESC, created_at DESC').all(req.user.id);
     res.json({ addresses });
   } catch (err: any) {
+    console.error('[API Route Error] GET /user/addresses:', err);
     res.status(500).json({ error: err.message || 'Failed to fetch addresses' });
   }
 });
@@ -70,7 +73,7 @@ router.post('/user/addresses', authenticateToken, (req: AuthRequest, res: Respon
       return res.status(401).json({ error: 'Authentication required' });
     }
 
-    const { name, phone, addressLine1, addressLine2, city, state, pincode, isDefault } = req.body;
+    const { name, phone, addressLine1, addressLine2, city, state, pincode, isDefault } = req.body || {};
 
     if (!name || !phone || !addressLine1 || !city || !state || !pincode) {
       return res.status(400).json({ error: 'Name, phone, address line 1, city, state, and pincode are required' });
@@ -88,19 +91,20 @@ router.post('/user/addresses', authenticateToken, (req: AuthRequest, res: Respon
     `).run(
       addressId,
       req.user.id,
-      name.trim(),
-      phone.trim(),
-      addressLine1.trim(),
-      addressLine2 ? addressLine2.trim() : null,
-      city.trim(),
-      state.trim(),
-      pincode.trim(),
+      String(name).trim(),
+      String(phone).trim(),
+      String(addressLine1).trim(),
+      addressLine2 ? String(addressLine2).trim() : null,
+      String(city).trim(),
+      String(state).trim(),
+      String(pincode).trim(),
       isDefault ? 1 : 0
     );
 
     const addresses = db.prepare('SELECT * FROM addresses WHERE user_id = ? ORDER BY is_default DESC, created_at DESC').all(req.user.id);
     res.status(201).json({ message: 'Address saved successfully', addressId, addresses });
   } catch (err: any) {
+    console.error('[API Route Error] POST /user/addresses:', err);
     res.status(500).json({ error: err.message || 'Failed to save address' });
   }
 });
@@ -118,6 +122,7 @@ router.delete('/user/addresses/:id', authenticateToken, (req: AuthRequest, res: 
     const addresses = db.prepare('SELECT * FROM addresses WHERE user_id = ? ORDER BY is_default DESC, created_at DESC').all(req.user.id);
     res.json({ message: 'Address removed', addresses });
   } catch (err: any) {
+    console.error('[API Route Error] DELETE /user/addresses/:id:', err);
     res.status(500).json({ error: err.message || 'Failed to delete address' });
   }
 });

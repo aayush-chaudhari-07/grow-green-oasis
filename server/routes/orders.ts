@@ -114,6 +114,7 @@ router.post('/orders/checkout', optionalAuth, (req: AuthRequest, res: Response) 
       throw err;
     }
   } catch (err: any) {
+    console.error('[API Route Error] POST /orders/checkout:', err);
     res.status(500).json({ error: err.message || 'Checkout failed' });
   }
 });
@@ -160,6 +161,7 @@ router.get('/orders/my-orders', authenticateToken, (req: AuthRequest, res: Respo
 
     res.json(result);
   } catch (err: any) {
+    console.error('[API Route Error] GET /orders/my-orders:', err);
     res.status(500).json({ error: err.message || 'Failed to fetch order history' });
   }
 });
@@ -206,6 +208,7 @@ router.get('/orders/:id', optionalAuth, (req: AuthRequest, res: Response) => {
       items
     });
   } catch (err: any) {
+    console.error('[API Route Error] GET /orders/:id:', err);
     res.status(500).json({ error: err.message || 'Failed to fetch order' });
   }
 });
