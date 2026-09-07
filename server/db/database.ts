@@ -2,17 +2,40 @@ import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import fs from 'node:fs';
 
-const dataDir = path.resolve(process.cwd(), 'data');
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
+const getDatabasePath = () => {
+  if (process.env.DATABASE_PATH && process.env.DATABASE_PATH.trim()) {
+    return process.env.DATABASE_PATH.trim();
+  }
+  const isVercel = !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
+  if (isVercel) {
+    return path.join('/tmp', 'grow_green.db');
+  }
+  try {
+    const dataDir = path.resolve(process.cwd(), 'data');
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    return path.join(dataDir, 'grow_green.db');
+  } catch (_err) {
+    return path.join('/tmp', 'grow_green.db');
+  }
+};
 
-const dbPath = path.join(dataDir, 'grow_green.db');
+const dbPath = getDatabasePath();
 export const db = new DatabaseSync(dbPath);
 
-// Enable WAL mode for better concurrency and foreign keys
-db.exec('PRAGMA journal_mode = WAL;');
-db.exec('PRAGMA foreign_keys = ON;');
+// Enable WAL mode safely
+try {
+  db.exec('PRAGMA journal_mode = WAL;');
+} catch (_e) {
+  // Fallback for environments where WAL mode is restricted
+}
+
+try {
+  db.exec('PRAGMA foreign_keys = ON;');
+} catch (_e) {
+  // Ignore if foreign keys pragma fails
+}
 
 export const initDatabase = () => {
   // Create tables
