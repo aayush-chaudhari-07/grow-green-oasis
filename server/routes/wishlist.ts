@@ -1,6 +1,6 @@
 import express, { type Response } from 'express';
-import { db } from '../db/database.ts';
-import { authenticateToken, type AuthRequest } from '../middleware/auth.ts';
+import { db } from '../db/database';
+import { authenticateToken, type AuthRequest } from '../middleware/auth';
 
 const router = express.Router();
 

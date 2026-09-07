@@ -1,8 +1,8 @@
 import express, { type Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { db } from '../db/database.ts';
-import { authenticateToken, type AuthRequest } from '../middleware/auth.ts';
+import { db } from '../db/database';
+import { authenticateToken, type AuthRequest } from '../middleware/auth';
 
 const router = express.Router();
 const getJwtSecret = () => process.env.JWT_SECRET || 'grow_green_oasis_super_secret_jwt_key_2026!';
