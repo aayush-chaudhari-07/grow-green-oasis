@@ -1,14 +1,18 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import { Link, useLocation } from "react-router-dom";
 import logo from "@/assets/logo.png";
-import { Leaf, ShoppingCart, User as UserIcon, LogOut } from "lucide-react";
+import { Leaf, ShoppingCart, User as UserIcon, LogOut, Heart, Package } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
+import { useWishlist } from "@/context/WishlistContext";
 
 const Navbar = () => {
   const [scrolled, setScrolled] = useState(false);
+  const location = useLocation();
   const { setIsCartOpen, itemCount } = useCart();
   const { user, isAuthenticated, setIsAuthModalOpen, logout } = useAuth();
+  const { wishlistCount } = useWishlist();
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -16,43 +20,83 @@ const Navbar = () => {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  const isHome = location.pathname === "/";
+
   return (
     <motion.nav
       initial={{ y: -100 }}
       animate={{ y: 0 }}
       transition={{ duration: 0.6, ease: "easeOut" }}
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled
+        scrolled || !isHome
           ? "bg-popover/95 backdrop-blur-md shadow-plant"
           : "bg-transparent"
       }`}
     >
       <div className="container mx-auto flex items-center justify-between py-4 px-6">
-        <a href="#" className="flex items-center gap-2">
+        <Link to="/" className="flex items-center gap-2">
           <img src={logo} alt="Grow Green" className="h-10 w-10" />
           <span className="font-display text-xl font-bold text-primary">
             Grow Green
           </span>
-        </a>
+        </Link>
 
         <div className="hidden md:flex items-center gap-8">
-          {["Home", "Shop", "Categories", "About"].map((item) => (
-            <a
-              key={item}
-              href={`#${item.toLowerCase()}`}
-              className="text-sm font-medium text-foreground/70 hover:text-primary transition-colors relative after:absolute after:bottom-0 after:left-0 after:w-0 after:h-0.5 after:bg-primary after:transition-all hover:after:w-full"
-            >
-              {item}
-            </a>
-          ))}
+          <a
+            href={isHome ? "#home" : "/#home"}
+            className="text-sm font-medium text-foreground/70 hover:text-primary transition-colors relative after:absolute after:bottom-0 after:left-0 after:w-0 after:h-0.5 after:bg-primary after:transition-all hover:after:w-full"
+          >
+            Home
+          </a>
+          <a
+            href={isHome ? "#shop" : "/#shop"}
+            className="text-sm font-medium text-foreground/70 hover:text-primary transition-colors relative after:absolute after:bottom-0 after:left-0 after:w-0 after:h-0.5 after:bg-primary after:transition-all hover:after:w-full"
+          >
+            Shop
+          </a>
+          <a
+            href={isHome ? "#categories" : "/#categories"}
+            className="text-sm font-medium text-foreground/70 hover:text-primary transition-colors relative after:absolute after:bottom-0 after:left-0 after:w-0 after:h-0.5 after:bg-primary after:transition-all hover:after:w-full"
+          >
+            Categories
+          </a>
+          <a
+            href={isHome ? "#about" : "/#about"}
+            className="text-sm font-medium text-foreground/70 hover:text-primary transition-colors relative after:absolute after:bottom-0 after:left-0 after:w-0 after:h-0.5 after:bg-primary after:transition-all hover:after:w-full"
+          >
+            About
+          </a>
+          <Link
+            to="/my-orders"
+            className="text-sm font-medium text-foreground/70 hover:text-primary transition-colors relative after:absolute after:bottom-0 after:left-0 after:w-0 after:h-0.5 after:bg-primary after:transition-all hover:after:w-full"
+          >
+            My Orders
+          </Link>
         </div>
 
         <div className="flex items-center gap-3">
+          <Link
+            to="/wishlist"
+            title="Wishlist"
+            className="relative p-2 text-foreground/70 hover:text-primary transition-colors bg-secondary/50 rounded-full flex items-center justify-center"
+          >
+            <Heart size={18} />
+            {wishlistCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                {wishlistCount}
+              </span>
+            )}
+          </Link>
+
           {isAuthenticated ? (
             <div className="flex items-center gap-2">
-              <span className="hidden lg:inline text-xs font-semibold text-foreground/80 bg-secondary/80 px-3 py-1.5 rounded-full">
+              <Link
+                to="/my-orders"
+                className="hidden lg:inline-flex items-center gap-1.5 text-xs font-semibold text-foreground/80 bg-secondary/80 px-3 py-1.5 rounded-full hover:bg-secondary transition-colors"
+              >
+                <Package size={14} className="text-leaf" />
                 Hi, {user?.name.split(' ')[0]}
-              </span>
+              </Link>
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}

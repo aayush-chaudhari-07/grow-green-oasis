@@ -1,17 +1,26 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Clock, Sparkles, ShoppingBag, X } from "lucide-react";
+import { Clock, Sparkles, ShoppingBag, X, Heart } from "lucide-react";
 import type { Plant } from "@/data/plants";
 import { useCart } from "@/context/CartContext";
+import { useWishlist } from "@/context/WishlistContext";
 
 const PlantCard = ({ plant }: { plant: Plant }) => {
   const [hovered, setHovered] = useState(false);
   const { addToCart, setIsCartOpen } = useCart();
+  const { toggleWishlist, isInWishlist } = useWishlist();
+
+  const isSaved = isInWishlist(plant.id);
 
   const handleBuyNow = async (e: React.MouseEvent) => {
     e.stopPropagation();
     await addToCart(plant.id, 1);
     setIsCartOpen(true);
+  };
+
+  const handleToggleWishlist = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    await toggleWishlist(plant);
   };
 
   return (
@@ -39,6 +48,16 @@ const PlantCard = ({ plant }: { plant: Plant }) => {
               {plant.discount}% OFF
             </div>
           )}
+          <button
+            onClick={handleToggleWishlist}
+            title={isSaved ? "Remove from wishlist" : "Add to wishlist"}
+            className="absolute top-3 right-3 z-10 bg-popover/80 backdrop-blur-md p-2 rounded-full hover:bg-popover transition-colors shadow-sm"
+          >
+            <Heart
+              size={16}
+              className={`transition-colors ${isSaved ? "fill-destructive text-destructive" : "text-foreground/70 hover:text-destructive"}`}
+            />
+          </button>
         </div>
         <div className="p-5">
           <p className="text-xs text-leaf font-semibold uppercase tracking-wider mb-1">
@@ -77,12 +96,24 @@ const PlantCard = ({ plant }: { plant: Plant }) => {
                   {plant.discount}% OFF
                 </div>
               )}
-              <button
-                onClick={() => setHovered(false)}
-                className="absolute top-3 right-3 bg-foreground/20 backdrop-blur-sm text-cream p-1 rounded-full hover:bg-foreground/40 transition-colors"
-              >
-                <X size={14} />
-              </button>
+              <div className="absolute top-3 right-3 flex items-center gap-2">
+                <button
+                  onClick={handleToggleWishlist}
+                  title={isSaved ? "Remove from wishlist" : "Add to wishlist"}
+                  className="bg-popover/80 backdrop-blur-md p-1.5 rounded-full hover:bg-popover transition-colors shadow-sm text-foreground/70"
+                >
+                  <Heart
+                    size={15}
+                    className={`transition-colors ${isSaved ? "fill-destructive text-destructive" : "hover:text-destructive"}`}
+                  />
+                </button>
+                <button
+                  onClick={() => setHovered(false)}
+                  className="bg-foreground/20 backdrop-blur-sm text-cream p-1.5 rounded-full hover:bg-foreground/40 transition-colors"
+                >
+                  <X size={14} />
+                </button>
+              </div>
             </div>
 
             <div className="p-5">

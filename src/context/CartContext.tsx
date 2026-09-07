@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from './AuthContext';
+import { apiFetch } from '@/lib/api';
 
 export interface CartItem {
   id: string;
@@ -14,6 +15,18 @@ export interface CartItem {
   quantity: number;
 }
 
+export interface CheckoutData {
+  customerName: string;
+  customerEmail: string;
+  customerPhone?: string;
+  shippingAddress: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  paymentMethod?: string;
+  paymentStatus?: string;
+}
+
 interface CartContextType {
   items: CartItem[];
   totalAmount: number;
@@ -24,52 +37,32 @@ interface CartContextType {
   updateQuantity: (plantId: string, quantity: number) => Promise<void>;
   removeFromCart: (plantId: string) => Promise<void>;
   clearCart: () => Promise<void>;
-  checkout: (customerName: string, customerEmail: string, shippingAddress: string) => Promise<boolean>;
+  checkout: (data: CheckoutData | string, customerEmail?: string, shippingAddress?: string) => Promise<{ success: boolean; orderId?: string }>;
   isCheckingOut: boolean;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
-// Session ID for guests
-const getGuestSessionId = () => {
-  let sessionId = localStorage.getItem('grow_green_session_id');
-  if (!sessionId) {
-    sessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
-    localStorage.setItem('grow_green_session_id', sessionId);
-  }
-  return sessionId;
-};
-
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { token, user } = useAuth();
+  const { user } = useAuth();
   const [items, setItems] = useState<CartItem[]>([]);
   const [totalAmount, setTotalAmount] = useState<number>(0);
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
   const [isCheckingOut, setIsCheckingOut] = useState<boolean>(false);
 
-  const getHeaders = useCallback(() => {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'x-session-id': getGuestSessionId()
-    };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-    return headers;
-  }, [token]);
-
   const fetchCart = useCallback(async () => {
     try {
-      const res = await fetch('/api/cart', { headers: getHeaders() });
-      if (res.ok) {
-        const data = await res.json();
-        setItems(data.items || []);
-        setTotalAmount(data.totalAmount || 0);
+      const res = await apiFetch<{ items: CartItem[]; totalAmount: number }>('/api/cart');
+      if (res.ok && res.data) {
+        setItems(res.data.items || []);
+        setTotalAmount(res.data.totalAmount || 0);
+      } else {
+        console.error('[Cart Fetch Error]', res.error);
       }
     } catch (err) {
       console.error('Failed to fetch cart', err);
     }
-  }, [getHeaders]);
+  }, []);
 
   useEffect(() => {
     fetchCart();
@@ -77,32 +70,37 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const addToCart = async (plantId: string, quantity: number = 1) => {
     try {
-      const res = await fetch('/api/cart/add', {
+      const res = await apiFetch<{ message?: string; items: CartItem[]; totalAmount: number }>('/api/cart/add', {
         method: 'POST',
-        headers: getHeaders(),
         body: JSON.stringify({ plantId, quantity })
       });
-      const data = await res.json();
-      if (res.ok) {
+
+      if (res.ok && res.data) {
         toast.success('Added to cart!');
-        await fetchCart();
+        setItems(res.data.items || []);
+        setTotalAmount(res.data.totalAmount || 0);
       } else {
-        toast.error(data.error || 'Failed to add item to cart');
+        console.error('[Add To Cart Error]', res.error);
+        toast.error(res.error || 'Failed to add item to cart');
       }
     } catch (err) {
+      console.error('[Add To Cart Exception]', err);
       toast.error('Network error adding to cart');
     }
   };
 
   const updateQuantity = async (plantId: string, quantity: number) => {
     try {
-      const res = await fetch('/api/cart/update', {
+      const res = await apiFetch<{ items: CartItem[]; totalAmount: number }>('/api/cart/update', {
         method: 'PUT',
-        headers: getHeaders(),
         body: JSON.stringify({ plantId, quantity })
       });
-      if (res.ok) {
-        await fetchCart();
+      if (res.ok && res.data) {
+        setItems(res.data.items || []);
+        setTotalAmount(res.data.totalAmount || 0);
+      } else {
+        console.error('[Update Quantity Error]', res.error);
+        toast.error(res.error || 'Failed to update quantity');
       }
     } catch (err) {
       toast.error('Failed to update item quantity');
@@ -111,13 +109,16 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const removeFromCart = async (plantId: string) => {
     try {
-      const res = await fetch(`/api/cart/remove/${plantId}`, {
-        method: 'DELETE',
-        headers: getHeaders()
+      const res = await apiFetch<{ items: CartItem[]; totalAmount: number }>(`/api/cart/remove/${plantId}`, {
+        method: 'DELETE'
       });
-      if (res.ok) {
+      if (res.ok && res.data) {
         toast.info('Item removed from cart');
-        await fetchCart();
+        setItems(res.data.items || []);
+        setTotalAmount(res.data.totalAmount || 0);
+      } else {
+        console.error('[Remove From Cart Error]', res.error);
+        toast.error(res.error || 'Failed to remove item');
       }
     } catch (err) {
       toast.error('Failed to remove item');
@@ -126,45 +127,58 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const clearCart = async () => {
     try {
-      const res = await fetch('/api/cart/clear', {
-        method: 'DELETE',
-        headers: getHeaders()
+      const res = await apiFetch('/api/cart/clear', {
+        method: 'DELETE'
       });
       if (res.ok) {
         setItems([]);
         setTotalAmount(0);
       }
     } catch (err) {
-      console.error('Failed to clear cart');
+      console.error('Failed to clear cart', err);
     }
   };
 
-  const checkout = async (customerName: string, customerEmail: string, shippingAddress: string): Promise<boolean> => {
+  const checkout = async (
+    data: CheckoutData | string,
+    customerEmail?: string,
+    shippingAddress?: string
+  ): Promise<{ success: boolean; orderId?: string }> => {
     setIsCheckingOut(true);
     try {
-      const res = await fetch('/api/orders/checkout', {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify({ customerName, customerEmail, shippingAddress })
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        toast.error(data.error || 'Checkout failed');
-        setIsCheckingOut(false);
-        return false;
+      let payload: CheckoutData;
+      if (typeof data === 'string') {
+        payload = {
+          customerName: data,
+          customerEmail: customerEmail || '',
+          shippingAddress: shippingAddress || ''
+        };
+      } else {
+        payload = data;
       }
 
-      toast.success(data.message || 'Order placed successfully!');
+      const res = await apiFetch<{ orderId: string; message: string }>('/api/orders/checkout', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok || !res.data) {
+        console.error('[Checkout Error Details]', res.error);
+        toast.error(res.error || 'Checkout failed');
+        setIsCheckingOut(false);
+        return { success: false };
+      }
+
+      toast.success(res.data.message || 'Order placed successfully!');
       setItems([]);
       setTotalAmount(0);
-      setIsCartOpen(false);
       setIsCheckingOut(false);
-      return true;
+      return { success: true, orderId: res.data.orderId };
     } catch (err) {
+      console.error('[Checkout Exception]', err);
       toast.error('Network error during checkout');
       setIsCheckingOut(false);
-      return false;
+      return { success: false };
     }
   };
 
