@@ -117,3 +117,11 @@ ALTER TABLE orders DISABLE ROW LEVEL SECURITY;
 ALTER TABLE order_items DISABLE ROW LEVEL SECURITY;
 ALTER TABLE wishlist DISABLE ROW LEVEL SECURITY;
 ALTER TABLE addresses DISABLE ROW LEVEL SECURITY;
+
+-- Indexes for fast query performance
+CREATE INDEX IF NOT EXISTS idx_cart_items_user_id ON cart_items(user_id);
+CREATE INDEX IF NOT EXISTS idx_cart_items_session_id ON cart_items(session_id);
+CREATE INDEX IF NOT EXISTS idx_cart_items_plant_id ON cart_items(plant_id);
+CREATE INDEX IF NOT EXISTS idx_cart_items_user_plant ON cart_items(user_id, plant_id);
+CREATE INDEX IF NOT EXISTS idx_cart_items_session_plant ON cart_items(session_id, plant_id);
+

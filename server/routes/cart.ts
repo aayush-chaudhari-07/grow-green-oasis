@@ -33,20 +33,20 @@ const getCartKey = async (req: AuthRequest) => {
   return { field: 'session_id', value: sessionId };
 };
 
-// Helper to fetch full cart response
+// Helper to fetch full cart response with single joined query
 const fetchCartResponse = async (key: { field: string; value: string }) => {
-  const { data: cartItems } = await supabase.from('cart_items').select('id, quantity, plant_id').eq(key.field, key.value);
+  const { data: cartItems } = await supabase
+    .from('cart_items')
+    .select('id, quantity, plant_id, plants(id, name, image, price, original_price, discount, category)')
+    .eq(key.field, key.value)
+    .order('created_at', { ascending: true });
+
   if (!cartItems || cartItems.length === 0) {
     return { items: [], totalAmount: 0 };
   }
 
-  const plantIds = cartItems.map((c) => c.plant_id);
-  const { data: plants } = await supabase.from('plants').select('id, name, image, price, original_price, discount, category').in('id', plantIds);
-
-  const plantMap = new Map<string, any>((plants || []).map((p: any) => [p.id, p]));
-
-  const items = cartItems.map((c) => {
-    const plant = plantMap.get(c.plant_id) || {};
+  const items = cartItems.map((c: any) => {
+    const plant = (Array.isArray(c.plants) ? c.plants[0] : c.plants) || {};
     return {
       id: c.id,
       plantId: c.plant_id,

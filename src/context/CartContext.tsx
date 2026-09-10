@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { toast } from 'sonner';
 import { useAuth } from './AuthContext';
 import { apiFetch } from '@/lib/api';
+import { plants as catalogPlants } from '@/data/plants';
 
 export interface CartItem {
   id: string;
@@ -43,6 +44,11 @@ interface CartContextType {
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
+const calcTotal = (cartItems: CartItem[]): number => {
+  const sum = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
+  return Number(sum.toFixed(2));
+};
+
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const [items, setItems] = useState<CartItem[]>([]);
@@ -69,6 +75,40 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [fetchCart, user]);
 
   const addToCart = async (plantId: string, quantity: number = 1) => {
+    const prevItems = [...items];
+    const prevTotal = totalAmount;
+
+    const existingIndex = items.findIndex((i) => i.plantId === plantId);
+    let nextItems: CartItem[];
+
+    if (existingIndex >= 0) {
+      nextItems = items.map((item, idx) =>
+        idx === existingIndex
+          ? { ...item, quantity: item.quantity + quantity }
+          : item
+      );
+    } else {
+      const plantMeta = catalogPlants.find((p) => p.id === plantId);
+      const newItem: CartItem = {
+        id: 'opt_' + Date.now() + '_' + Math.random().toString(36).substring(2, 5),
+        plantId,
+        name: plantMeta?.name || 'Plant',
+        image: plantMeta?.image || '/plants/monstera.jpg',
+        price: plantMeta?.price || 0,
+        originalPrice: plantMeta?.originalPrice,
+        discount: plantMeta?.discount,
+        category: plantMeta?.category || 'indoor',
+        quantity
+      };
+      nextItems = [...items, newItem];
+    }
+
+    // Immediate optimistic UI update
+    setItems(nextItems);
+    setTotalAmount(calcTotal(nextItems));
+    toast.success('Added to cart!');
+
+    // Background API sync
     try {
       const res = await apiFetch<{ message?: string; items: CartItem[]; totalAmount: number }>('/api/cart/add', {
         method: 'POST',
@@ -76,20 +116,38 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (res.ok && res.data) {
-        toast.success('Added to cart!');
         setItems(res.data.items || []);
         setTotalAmount(res.data.totalAmount || 0);
       } else {
         console.error('[Add To Cart Error]', res.error);
         toast.error(res.error || 'Failed to add item to cart');
+        setItems(prevItems);
+        setTotalAmount(prevTotal);
       }
     } catch (err) {
       console.error('[Add To Cart Exception]', err);
       toast.error('Network error adding to cart');
+      setItems(prevItems);
+      setTotalAmount(prevTotal);
     }
   };
 
   const updateQuantity = async (plantId: string, quantity: number) => {
+    const prevItems = [...items];
+    const prevTotal = totalAmount;
+
+    let nextItems: CartItem[];
+    if (quantity <= 0) {
+      nextItems = items.filter((i) => i.plantId !== plantId);
+    } else {
+      nextItems = items.map((i) => (i.plantId === plantId ? { ...i, quantity } : i));
+    }
+
+    // Immediate optimistic UI update
+    setItems(nextItems);
+    setTotalAmount(calcTotal(nextItems));
+
+    // Background API sync
     try {
       const res = await apiFetch<{ items: CartItem[]; totalAmount: number }>('/api/cart/update', {
         method: 'PUT',
@@ -101,41 +159,68 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         console.error('[Update Quantity Error]', res.error);
         toast.error(res.error || 'Failed to update quantity');
+        setItems(prevItems);
+        setTotalAmount(prevTotal);
       }
     } catch (err) {
       toast.error('Failed to update item quantity');
+      setItems(prevItems);
+      setTotalAmount(prevTotal);
     }
   };
 
   const removeFromCart = async (plantId: string) => {
+    const prevItems = [...items];
+    const prevTotal = totalAmount;
+
+    const nextItems = items.filter((i) => i.plantId !== plantId);
+
+    // Immediate optimistic UI update
+    setItems(nextItems);
+    setTotalAmount(calcTotal(nextItems));
+    toast.info('Item removed from cart');
+
+    // Background API sync
     try {
       const res = await apiFetch<{ items: CartItem[]; totalAmount: number }>(`/api/cart/remove/${plantId}`, {
         method: 'DELETE'
       });
       if (res.ok && res.data) {
-        toast.info('Item removed from cart');
         setItems(res.data.items || []);
         setTotalAmount(res.data.totalAmount || 0);
       } else {
         console.error('[Remove From Cart Error]', res.error);
         toast.error(res.error || 'Failed to remove item');
+        setItems(prevItems);
+        setTotalAmount(prevTotal);
       }
     } catch (err) {
       toast.error('Failed to remove item');
+      setItems(prevItems);
+      setTotalAmount(prevTotal);
     }
   };
 
   const clearCart = async () => {
+    const prevItems = [...items];
+    const prevTotal = totalAmount;
+
+    // Immediate optimistic UI update
+    setItems([]);
+    setTotalAmount(0);
+
     try {
       const res = await apiFetch('/api/cart/clear', {
         method: 'DELETE'
       });
-      if (res.ok) {
-        setItems([]);
-        setTotalAmount(0);
+      if (!res.ok) {
+        setItems(prevItems);
+        setTotalAmount(prevTotal);
       }
     } catch (err) {
       console.error('Failed to clear cart', err);
+      setItems(prevItems);
+      setTotalAmount(prevTotal);
     }
   };
 

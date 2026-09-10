@@ -58,9 +58,10 @@ export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [fetchWishlist, user]);
 
   const toggleWishlist = async (plant: Plant): Promise<boolean> => {
+    const exists = wishlistIds.has(plant.id);
+
     if (!isAuthenticated) {
-      // Toggle locally for guest and prompt login or save locally
-      const exists = wishlistIds.has(plant.id);
+      // Toggle locally for guest
       let updated: Plant[];
       if (exists) {
         updated = wishlistItems.filter((p) => p.id !== plant.id);
@@ -75,34 +76,46 @@ export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       return !exists;
     }
 
+    // Save previous state for optimistic rollback
+    const prevItems = [...wishlistItems];
+    const prevIds = new Set(wishlistIds);
+
+    // Optimistic UI update
+    let nextItems: Plant[];
+    const nextIds = new Set(wishlistIds);
+
+    if (exists) {
+      nextItems = wishlistItems.filter((p) => p.id !== plant.id);
+      nextIds.delete(plant.id);
+      toast.info(`Removed ${plant.name} from wishlist`);
+    } else {
+      nextItems = [...wishlistItems, plant];
+      nextIds.add(plant.id);
+      toast.success(`Saved ${plant.name} to wishlist!`);
+    }
+
+    setWishlistItems(nextItems);
+    setWishlistIds(nextIds);
+
+    // Background API Sync
     try {
       const res = await apiFetch<{ message: string; inWishlist: boolean }>('/api/wishlist/toggle', {
         method: 'POST',
         body: JSON.stringify({ plantId: plant.id })
       });
 
-      if (res.ok && res.data) {
-        if (res.data.inWishlist) {
-          toast.success(`Saved ${plant.name} to wishlist!`);
-          setWishlistItems((prev) => [...prev.filter((p) => p.id !== plant.id), plant]);
-          setWishlistIds((prev) => new Set([...Array.from(prev), plant.id]));
-        } else {
-          toast.info(`Removed ${plant.name} from wishlist`);
-          setWishlistItems((prev) => prev.filter((p) => p.id !== plant.id));
-          setWishlistIds((prev) => {
-            const next = new Set(prev);
-            next.delete(plant.id);
-            return next;
-          });
-        }
-        return res.data.inWishlist;
-      } else {
+      if (!res.ok || !res.data) {
         toast.error(res.error || 'Failed to update wishlist');
-        return false;
+        setWishlistItems(prevItems);
+        setWishlistIds(prevIds);
+        return exists;
       }
+      return res.data.inWishlist;
     } catch (err) {
       toast.error('Network error updating wishlist');
-      return false;
+      setWishlistItems(prevItems);
+      setWishlistIds(prevIds);
+      return exists;
     }
   };
 
@@ -119,21 +132,31 @@ export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       return;
     }
 
+    const prevItems = [...wishlistItems];
+    const prevIds = new Set(wishlistIds);
+
+    // Optimistic UI update
+    const nextItems = wishlistItems.filter((p) => p.id !== plantId);
+    const nextIds = new Set(wishlistIds);
+    nextIds.delete(plantId);
+
+    setWishlistItems(nextItems);
+    setWishlistIds(nextIds);
+    toast.info('Item removed from wishlist');
+
     try {
       const res = await apiFetch(`/api/wishlist/remove/${plantId}`, {
         method: 'DELETE'
       });
-      if (res.ok) {
-        setWishlistItems((prev) => prev.filter((p) => p.id !== plantId));
-        setWishlistIds((prev) => {
-          const next = new Set(prev);
-          next.delete(plantId);
-          return next;
-        });
-        toast.info('Item removed from wishlist');
+      if (!res.ok) {
+        toast.error(res.error || 'Failed to remove item');
+        setWishlistItems(prevItems);
+        setWishlistIds(prevIds);
       }
     } catch (err) {
       toast.error('Failed to remove item');
+      setWishlistItems(prevItems);
+      setWishlistIds(prevIds);
     }
   };
 

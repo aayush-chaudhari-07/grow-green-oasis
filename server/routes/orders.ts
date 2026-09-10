@@ -126,14 +126,16 @@ router.get('/orders/my-orders', authenticateToken, async (req: AuthRequest, res:
       return res.status(401).json({ error: 'Authentication required' });
     }
 
-    const { data: orders, error: ordersErr } = await supabase.from('orders').select('*').eq('user_id', req.user.id).order('created_at', { ascending: false });
+    const { data: orders, error: ordersErr } = await supabase
+      .from('orders')
+      .select('*, order_items(*)')
+      .eq('user_id', req.user.id)
+      .order('created_at', { ascending: false });
 
     if (ordersErr) throw ordersErr;
 
-    const result: any[] = [];
-    for (const o of orders || []) {
-      const { data: rawItems } = await supabase.from('order_items').select('*').eq('order_id', o.id);
-      const items = (rawItems || []).map((i) => ({
+    const result = (orders || []).map((o: any) => {
+      const items = (o.order_items || []).map((i: any) => ({
         id: i.id,
         plantId: i.plant_id,
         plantName: i.plant_name,
@@ -142,7 +144,7 @@ router.get('/orders/my-orders', authenticateToken, async (req: AuthRequest, res:
         price: Number(i.price)
       }));
 
-      result.push({
+      return {
         id: o.id,
         customerName: o.customer_name,
         customerEmail: o.customer_email,
@@ -157,8 +159,8 @@ router.get('/orders/my-orders', authenticateToken, async (req: AuthRequest, res:
         status: o.status || 'Order Placed',
         createdAt: o.created_at,
         items
-      });
-    }
+      };
+    });
 
     res.json(result);
   } catch (err: any) {

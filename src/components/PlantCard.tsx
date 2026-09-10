@@ -12,9 +12,9 @@ const PlantCard = ({ plant }: { plant: Plant }) => {
 
   const isSaved = isInWishlist(plant.id);
 
-  const handleBuyNow = async (e: React.MouseEvent) => {
+  const handleBuyNow = (e: React.MouseEvent) => {
     e.stopPropagation();
-    await addToCart(plant.id, 1);
+    addToCart(plant.id, 1);
     setIsCartOpen(true);
   };
 
@@ -41,6 +41,8 @@ const PlantCard = ({ plant }: { plant: Plant }) => {
           <img
             src={plant.image}
             alt={plant.name}
+            loading="lazy"
+            decoding="async"
             className="w-full h-56 object-cover transition-transform duration-500 group-hover:scale-110"
           />
           {plant.discount && (
@@ -89,6 +91,8 @@ const PlantCard = ({ plant }: { plant: Plant }) => {
               <img
                 src={plant.image}
                 alt={plant.name}
+                loading="lazy"
+                decoding="async"
                 className="w-full h-48 object-cover"
               />
               {plant.discount && (

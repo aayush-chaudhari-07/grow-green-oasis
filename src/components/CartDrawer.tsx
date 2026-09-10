@@ -173,6 +173,8 @@ const CartDrawer: React.FC = () => {
                           <img
                             src={item.image}
                             alt={item.name}
+                            loading="lazy"
+                            decoding="async"
                             className="w-16 h-16 object-cover rounded-xl"
                           />
                           <div className="flex-1">
