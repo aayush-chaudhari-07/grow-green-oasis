@@ -1,18 +1,23 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const supabaseUrl = process.env.SUPABASE_URL || 'https://placeholder.supabase.co';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'placeholder-key';
+export const getSupabase = (): SupabaseClient => {
+  const supabaseUrl = process.env.SUPABASE_URL || 'https://placeholder.supabase.co';
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'placeholder-key';
+  return createClient(supabaseUrl, supabaseKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false
+    }
+  });
+};
 
-if (!process.env.SUPABASE_URL || (!process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.SUPABASE_ANON_KEY)) {
-  console.warn('[Supabase Setup Notice] SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars are not set yet. Please configure them in Vercel / .env.');
-}
-
-export const supabase = createClient(supabaseUrl, supabaseKey, {
-  auth: {
-    persistSession: false,
-    autoRefreshToken: false
+export const supabase: SupabaseClient = new Proxy({} as SupabaseClient, {
+  get(_target, prop: keyof SupabaseClient) {
+    const client = getSupabase();
+    const value = client[prop];
+    return typeof value === 'function' ? (value as Function).bind(client) : value;
   }
 });
