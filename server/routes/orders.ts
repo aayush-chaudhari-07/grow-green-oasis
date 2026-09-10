@@ -1,10 +1,9 @@
 import express, { type Response } from 'express';
-import { db } from '../db/database.js';
+import { supabase } from '../db/database.js';
 import { optionalAuth, authenticateToken, type AuthRequest } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// Helper to get cart key
 const getCartKey = (req: AuthRequest) => {
   if (req.user?.id) {
     return { field: 'user_id', value: req.user.id };
@@ -15,7 +14,7 @@ const getCartKey = (req: AuthRequest) => {
 };
 
 // POST /api/orders/checkout
-router.post('/orders/checkout', optionalAuth, (req: AuthRequest, res: Response) => {
+router.post('/orders/checkout', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
     const {
       customerName,
@@ -27,7 +26,7 @@ router.post('/orders/checkout', optionalAuth, (req: AuthRequest, res: Response) 
       pincode,
       paymentMethod = 'Card',
       paymentStatus = 'Paid'
-    } = req.body;
+    } = req.body || {};
 
     if (!customerName || !customerEmail || !shippingAddress) {
       return res.status(400).json({ error: 'Customer name, email, and shipping address are required' });
@@ -35,84 +34,85 @@ router.post('/orders/checkout', optionalAuth, (req: AuthRequest, res: Response) 
 
     const key = getCartKey(req);
 
-    // Get current cart items with images
-    const cartItems = db.prepare(`
-      SELECT c.quantity, p.id as plant_id, p.name, p.image, p.price, p.stock
-      FROM cart_items c
-      JOIN plants p ON c.plant_id = p.id
-      WHERE c.${key.field} = ?
-    `).all(key.value) as any[];
+    // Get current cart items
+    const { data: cartItems } = await supabase.from('cart_items').select('quantity, plant_id').eq(key.field, key.value);
 
-    if (cartItems.length === 0) {
+    if (!cartItems || cartItems.length === 0) {
       return res.status(400).json({ error: 'Your cart is empty' });
     }
 
+    const plantIds = cartItems.map((c) => c.plant_id);
+    const { data: plants } = await supabase.from('plants').select('id, name, image, price, stock').in('id', plantIds);
+    const plantMap = new Map((plants || []).map((p) => [p.id, p]));
+
     let totalAmount = 0;
-    for (const item of cartItems) {
-      if (item.stock < item.quantity) {
-        return res.status(400).json({ error: `Not enough stock for ${item.name}` });
-      }
-      totalAmount += item.price * item.quantity;
-    }
+    const itemsToInsert: any[] = [];
 
     const orderId = 'ord_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+
+    for (const item of cartItems) {
+      const plant = plantMap.get(item.plant_id);
+      if (!plant) continue;
+
+      if ((plant.stock || 50) < item.quantity) {
+        return res.status(400).json({ error: `Not enough stock for ${plant.name}` });
+      }
+
+      const itemPrice = Number(plant.price);
+      totalAmount += itemPrice * item.quantity;
+
+      itemsToInsert.push({
+        id: 'oi_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+        order_id: orderId,
+        plant_id: plant.id,
+        plant_name: plant.name,
+        image: plant.image,
+        quantity: item.quantity,
+        price: itemPrice
+      });
+    }
+
     const userId = req.user?.id || null;
     const formattedAddress = [shippingAddress, city, state, pincode].filter(Boolean).join(', ');
     const initialStatus = 'Order Placed';
 
-    db.exec('BEGIN TRANSACTION;');
+    // Insert Order
+    const { error: orderErr } = await supabase.from('orders').insert({
+      id: orderId,
+      user_id: userId,
+      customer_name: customerName.trim(),
+      customer_email: customerEmail.trim(),
+      customer_phone: customerPhone ? customerPhone.trim() : null,
+      shipping_address: formattedAddress,
+      city: city ? city.trim() : null,
+      state: state ? state.trim() : null,
+      pincode: pincode ? pincode.trim() : null,
+      payment_method: paymentMethod,
+      payment_status: paymentStatus,
+      total_amount: Number(totalAmount.toFixed(2)),
+      status: initialStatus
+    });
 
-    try {
-      db.prepare(`
-        INSERT INTO orders (id, user_id, customer_name, customer_email, customer_phone, shipping_address, city, state, pincode, payment_method, payment_status, total_amount, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        orderId,
-        userId,
-        customerName.trim(),
-        customerEmail.trim(),
-        customerPhone ? customerPhone.trim() : null,
-        formattedAddress,
-        city ? city.trim() : null,
-        state ? state.trim() : null,
-        pincode ? pincode.trim() : null,
-        paymentMethod,
-        paymentStatus,
-        Number(totalAmount.toFixed(2)),
-        initialStatus
-      );
+    if (orderErr) throw orderErr;
 
-      const insertOrderItem = db.prepare(`
-        INSERT INTO order_items (id, order_id, plant_id, plant_name, image, quantity, price)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `);
-
-      const updateStock = db.prepare('UPDATE plants SET stock = stock - ? WHERE id = ?');
-
-      for (const item of cartItems) {
-        const itemId = 'oi_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-        insertOrderItem.run(itemId, orderId, item.plant_id, item.name, item.image, item.quantity, item.price);
-        updateStock.run(item.quantity, item.plant_id);
-      }
-
-      // Clear cart
-      db.prepare(`DELETE FROM cart_items WHERE ${key.field} = ?`).run(key.value);
-
-      db.exec('COMMIT;');
-
-      res.status(201).json({
-        orderId,
-        totalAmount: Number(totalAmount.toFixed(2)),
-        status: initialStatus,
-        paymentMethod,
-        paymentStatus,
-        shippingAddress: formattedAddress,
-        message: 'Order placed successfully! Thank you for your purchase.'
-      });
-    } catch (err: any) {
-      db.exec('ROLLBACK;');
-      throw err;
+    // Insert Order Items
+    if (itemsToInsert.length > 0) {
+      const { error: itemsErr } = await supabase.from('order_items').insert(itemsToInsert);
+      if (itemsErr) throw itemsErr;
     }
+
+    // Clear cart
+    await supabase.from('cart_items').delete().eq(key.field, key.value);
+
+    res.status(201).json({
+      orderId,
+      totalAmount: Number(totalAmount.toFixed(2)),
+      status: initialStatus,
+      paymentMethod,
+      paymentStatus,
+      shippingAddress: formattedAddress,
+      message: 'Order placed successfully! Thank you for your purchase.'
+    });
   } catch (err: any) {
     console.error('[API Route Error] POST /orders/checkout:', err);
     res.status(500).json({ error: err.message || 'Checkout failed' });
@@ -120,28 +120,29 @@ router.post('/orders/checkout', optionalAuth, (req: AuthRequest, res: Response) 
 });
 
 // GET /api/orders/my-orders
-router.get('/orders/my-orders', authenticateToken, (req: AuthRequest, res: Response) => {
+router.get('/orders/my-orders', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user?.id) {
       return res.status(401).json({ error: 'Authentication required' });
     }
 
-    const orders = db.prepare(`
-      SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC
-    `).all(req.user.id) as any[];
+    const { data: orders, error: ordersErr } = await supabase.from('orders').select('*').eq('user_id', req.user.id).order('created_at', { ascending: false });
 
-    const result = orders.map((o) => {
-      const rawItems = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(o.id) as any[];
-      const items = rawItems.map(i => ({
+    if (ordersErr) throw ordersErr;
+
+    const result: any[] = [];
+    for (const o of orders || []) {
+      const { data: rawItems } = await supabase.from('order_items').select('*').eq('order_id', o.id);
+      const items = (rawItems || []).map((i) => ({
         id: i.id,
         plantId: i.plant_id,
         plantName: i.plant_name,
         image: i.image,
         quantity: i.quantity,
-        price: i.price
+        price: Number(i.price)
       }));
 
-      return {
+      result.push({
         id: o.id,
         customerName: o.customer_name,
         customerEmail: o.customer_email,
@@ -152,12 +153,12 @@ router.get('/orders/my-orders', authenticateToken, (req: AuthRequest, res: Respo
         pincode: o.pincode,
         paymentMethod: o.payment_method || 'Card',
         paymentStatus: o.payment_status || 'Paid',
-        totalAmount: o.total_amount,
+        totalAmount: Number(o.total_amount),
         status: o.status || 'Order Placed',
         createdAt: o.created_at,
         items
-      };
-    });
+      });
+    }
 
     res.json(result);
   } catch (err: any) {
@@ -166,29 +167,28 @@ router.get('/orders/my-orders', authenticateToken, (req: AuthRequest, res: Respo
   }
 });
 
-// GET /api/orders/:id - Get specific order details
-router.get('/orders/:id', optionalAuth, (req: AuthRequest, res: Response) => {
+// GET /api/orders/:id
+router.get('/orders/:id', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(id) as any;
+    const { data: order, error } = await supabase.from('orders').select('*').eq('id', id).maybeSingle();
 
-    if (!order) {
+    if (error || !order) {
       return res.status(404).json({ error: 'Order not found' });
     }
 
-    // Security check if user is logged in
     if (order.user_id && req.user?.id && order.user_id !== req.user.id) {
       return res.status(403).json({ error: 'Access denied to this order' });
     }
 
-    const rawItems = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id) as any[];
-    const items = rawItems.map(i => ({
+    const { data: rawItems } = await supabase.from('order_items').select('*').eq('order_id', order.id);
+    const items = (rawItems || []).map((i) => ({
       id: i.id,
       plantId: i.plant_id,
       plantName: i.plant_name,
       image: i.image,
       quantity: i.quantity,
-      price: i.price
+      price: Number(i.price)
     }));
 
     res.json({
@@ -202,7 +202,7 @@ router.get('/orders/:id', optionalAuth, (req: AuthRequest, res: Response) => {
       pincode: order.pincode,
       paymentMethod: order.payment_method || 'Card',
       paymentStatus: order.payment_status || 'Paid',
-      totalAmount: order.total_amount,
+      totalAmount: Number(order.total_amount),
       status: order.status || 'Order Placed',
       createdAt: order.created_at,
       items

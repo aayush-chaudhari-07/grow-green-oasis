@@ -1,27 +1,29 @@
 import express, { type Response } from 'express';
-import { db } from '../db/database.js';
+import { supabase } from '../db/database.js';
 
 const router = express.Router();
 
 // GET /api/stats/summary
-router.get('/stats/summary', (_req, res: Response) => {
+router.get('/stats/summary', async (_req, res: Response) => {
   try {
-    const plantCountRow = db.prepare('SELECT COUNT(*) as count FROM plants').get() as { count: number };
-    const orderCountRow = db.prepare('SELECT COUNT(*) as count FROM orders').get() as { count: number };
-    const userCountRow = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
+    const { count: plantCount } = await supabase.from('plants').select('*', { count: 'exact', head: true });
+    const { count: orderCount } = await supabase.from('orders').select('*', { count: 'exact', head: true });
+    const { count: userCount } = await supabase.from('users').select('*', { count: 'exact', head: true });
 
-    // Format display metrics for Hero and Dashboard
-    const plantVarieties = plantCountRow.count > 0 ? `${plantCountRow.count}+` : "500+";
-    const totalOrders = orderCountRow.count;
+    const totalPlants = plantCount || 0;
+    const totalOrders = orderCount || 0;
+    const totalUsers = userCount || 0;
+
+    const plantVarieties = totalPlants > 0 ? `${totalPlants}+` : "500+";
     const happyCustomers = totalOrders > 0 ? `${(10 + totalOrders)}K+` : "10K+";
 
     res.json({
       plantVarieties,
       happyCustomers,
       organicPercentage: "100%",
-      totalPlants: plantCountRow.count,
-      totalOrders: orderCountRow.count,
-      totalUsers: userCountRow.count
+      totalPlants,
+      totalOrders,
+      totalUsers
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to fetch summary stats' });

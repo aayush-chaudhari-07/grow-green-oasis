@@ -1,34 +1,31 @@
 import express, { type Response } from 'express';
-import { db } from '../db/database.js';
+import { supabase } from '../db/database.js';
 import { optionalAuth, type AuthRequest } from '../middleware/auth.js';
 
 const router = express.Router();
 
 // Helper to identify session or user and migrate guest items if user just logged in
-const getCartKey = (req: AuthRequest) => {
+const getCartKey = async (req: AuthRequest) => {
   const rawSessionId = req.headers['x-session-id'];
   const sessionId = typeof rawSessionId === 'string' && rawSessionId.trim() ? rawSessionId.trim() : 'guest_default_session';
 
   if (req.user?.id) {
-    // Migrate guest cart items to authenticated user if session ID is specific
     if (sessionId !== 'guest_default_session') {
       try {
-        const guestItems = db.prepare('SELECT plant_id, quantity FROM cart_items WHERE session_id = ?').all(sessionId) as any[];
+        const { data: guestItems } = await supabase.from('cart_items').select('plant_id, quantity').eq('session_id', sessionId);
         if (guestItems && guestItems.length > 0) {
           for (const item of guestItems) {
-            const existing = db.prepare('SELECT id, quantity FROM cart_items WHERE user_id = ? AND plant_id = ?').get(req.user.id, item.plant_id) as any;
+            const { data: existing } = await supabase.from('cart_items').select('id, quantity').eq('user_id', req.user.id).eq('plant_id', item.plant_id).maybeSingle();
             if (existing) {
-              db.prepare('UPDATE cart_items SET quantity = quantity + ? WHERE id = ?').run(item.quantity, existing.id);
+              await supabase.from('cart_items').update({ quantity: existing.quantity + item.quantity }).eq('id', existing.id);
             } else {
               const id = 'c_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-              db.prepare('INSERT INTO cart_items (id, user_id, plant_id, quantity) VALUES (?, ?, ?, ?)').run(id, req.user.id, item.plant_id, item.quantity);
+              await supabase.from('cart_items').insert({ id, user_id: req.user.id, plant_id: item.plant_id, quantity: item.quantity });
             }
           }
-          db.prepare('DELETE FROM cart_items WHERE session_id = ?').run(sessionId);
+          await supabase.from('cart_items').delete().eq('session_id', sessionId);
         }
-      } catch (e) {
-        // Ignore migration error if any
-      }
+      } catch (_e) {}
     }
     return { field: 'user_id', value: req.user.id };
   }
@@ -36,35 +33,41 @@ const getCartKey = (req: AuthRequest) => {
 };
 
 // Helper to fetch full cart response
-const fetchCartResponse = (key: { field: string; value: string }) => {
-  const rows = db.prepare(`
-    SELECT c.id, c.quantity, p.id as plant_id, p.name, p.image, p.price, p.original_price, p.discount, p.category
-    FROM cart_items c
-    JOIN plants p ON c.plant_id = p.id
-    WHERE c.${key.field} = ?
-  `).all(key.value) as any[];
+const fetchCartResponse = async (key: { field: string; value: string }) => {
+  const { data: cartItems } = await supabase.from('cart_items').select('id, quantity, plant_id').eq(key.field, key.value);
+  if (!cartItems || cartItems.length === 0) {
+    return { items: [], totalAmount: 0 };
+  }
 
-  const items = rows.map((r) => ({
-    id: r.id,
-    plantId: r.plant_id,
-    name: r.name,
-    image: r.image,
-    price: r.price,
-    originalPrice: r.original_price || undefined,
-    discount: r.discount || undefined,
-    category: r.category,
-    quantity: r.quantity
-  }));
+  const plantIds = cartItems.map((c) => c.plant_id);
+  const { data: plants } = await supabase.from('plants').select('id, name, image, price, original_price, discount, category').in('id', plantIds);
+
+  const plantMap = new Map<string, any>((plants || []).map((p: any) => [p.id, p]));
+
+  const items = cartItems.map((c) => {
+    const plant = plantMap.get(c.plant_id) || {};
+    return {
+      id: c.id,
+      plantId: c.plant_id,
+      name: plant.name || 'Plant',
+      image: plant.image || '',
+      price: Number(plant.price || 0),
+      originalPrice: plant.original_price ? Number(plant.original_price) : undefined,
+      discount: plant.discount ? Number(plant.discount) : undefined,
+      category: plant.category || 'indoor',
+      quantity: c.quantity
+    };
+  });
 
   const totalAmount = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   return { items, totalAmount: Number(totalAmount.toFixed(2)) };
 };
 
 // GET /api/cart
-router.get('/cart', optionalAuth, (req: AuthRequest, res: Response) => {
+router.get('/cart', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const key = getCartKey(req);
-    const cartData = fetchCartResponse(key);
+    const key = await getCartKey(req);
+    const cartData = await fetchCartResponse(key);
     res.json(cartData);
   } catch (err: any) {
     console.error('[API Route Error] GET /cart:', err);
@@ -73,7 +76,7 @@ router.get('/cart', optionalAuth, (req: AuthRequest, res: Response) => {
 });
 
 // POST /api/cart/add
-router.post('/cart/add', optionalAuth, (req: AuthRequest, res: Response) => {
+router.post('/cart/add', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { plantId, quantity = 1 } = req.body || {};
     const parsedQty = Math.max(1, parseInt(quantity, 10) || 1);
@@ -82,35 +85,26 @@ router.post('/cart/add', optionalAuth, (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'Plant ID is required' });
     }
 
-    const plant = db.prepare('SELECT id FROM plants WHERE id = ?').get(plantId);
+    const { data: plant } = await supabase.from('plants').select('id').eq('id', plantId).maybeSingle();
     if (!plant) {
       return res.status(404).json({ error: 'Plant not found' });
     }
 
-    const key = getCartKey(req);
+    const key = await getCartKey(req);
 
-    // Check existing item in cart
-    const existing = db.prepare(`
-      SELECT id, quantity FROM cart_items WHERE ${key.field} = ? AND plant_id = ?
-    `).get(key.value, plantId) as any;
+    const { data: existing } = await supabase.from('cart_items').select('id, quantity').eq(key.field, key.value).eq('plant_id', plantId).maybeSingle();
 
     if (existing) {
       const newQty = existing.quantity + parsedQty;
-      db.prepare('UPDATE cart_items SET quantity = ? WHERE id = ?').run(newQty, existing.id);
+      await supabase.from('cart_items').update({ quantity: newQty }).eq('id', existing.id);
     } else {
       const id = 'c_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-      if (key.field === 'user_id') {
-        db.prepare('INSERT INTO cart_items (id, user_id, plant_id, quantity) VALUES (?, ?, ?, ?)').run(
-          id, key.value, plantId, parsedQty
-        );
-      } else {
-        db.prepare('INSERT INTO cart_items (id, session_id, plant_id, quantity) VALUES (?, ?, ?, ?)').run(
-          id, key.value, plantId, parsedQty
-        );
-      }
+      const payload: any = { id, plant_id: plantId, quantity: parsedQty };
+      payload[key.field] = key.value;
+      await supabase.from('cart_items').insert(payload);
     }
 
-    const updatedCart = fetchCartResponse(key);
+    const updatedCart = await fetchCartResponse(key);
     res.json({ message: 'Item added to cart', ...updatedCart });
   } catch (err: any) {
     console.error('[API Route Error] POST /cart/add:', err);
@@ -119,7 +113,7 @@ router.post('/cart/add', optionalAuth, (req: AuthRequest, res: Response) => {
 });
 
 // PUT /api/cart/update
-router.put('/cart/update', optionalAuth, (req: AuthRequest, res: Response) => {
+router.put('/cart/update', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { plantId, quantity } = req.body || {};
     if (!plantId || quantity === undefined) {
@@ -127,17 +121,15 @@ router.put('/cart/update', optionalAuth, (req: AuthRequest, res: Response) => {
     }
 
     const parsedQty = parseInt(quantity, 10);
-    const key = getCartKey(req);
+    const key = await getCartKey(req);
 
     if (isNaN(parsedQty) || parsedQty <= 0) {
-      db.prepare(`DELETE FROM cart_items WHERE ${key.field} = ? AND plant_id = ?`).run(key.value, plantId);
+      await supabase.from('cart_items').delete().eq(key.field, key.value).eq('plant_id', plantId);
     } else {
-      db.prepare(`UPDATE cart_items SET quantity = ? WHERE ${key.field} = ? AND plant_id = ?`).run(
-        parsedQty, key.value, plantId
-      );
+      await supabase.from('cart_items').update({ quantity: parsedQty }).eq(key.field, key.value).eq('plant_id', plantId);
     }
 
-    const updatedCart = fetchCartResponse(key);
+    const updatedCart = await fetchCartResponse(key);
     res.json({ message: 'Cart updated', ...updatedCart });
   } catch (err: any) {
     console.error('[API Route Error] PUT /cart/update:', err);
@@ -146,10 +138,10 @@ router.put('/cart/update', optionalAuth, (req: AuthRequest, res: Response) => {
 });
 
 // DELETE /api/cart/clear
-router.delete('/cart/clear', optionalAuth, (req: AuthRequest, res: Response) => {
+router.delete('/cart/clear', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const key = getCartKey(req);
-    db.prepare(`DELETE FROM cart_items WHERE ${key.field} = ?`).run(key.value);
+    const key = await getCartKey(req);
+    await supabase.from('cart_items').delete().eq(key.field, key.value);
     res.json({ message: 'Cart cleared', items: [], totalAmount: 0 });
   } catch (err: any) {
     console.error('[API Route Error] DELETE /cart/clear:', err);
@@ -158,14 +150,14 @@ router.delete('/cart/clear', optionalAuth, (req: AuthRequest, res: Response) => 
 });
 
 // DELETE /api/cart/remove/:plantId
-router.delete('/cart/remove/:plantId', optionalAuth, (req: AuthRequest, res: Response) => {
+router.delete('/cart/remove/:plantId', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { plantId } = req.params;
-    const key = getCartKey(req);
+    const key = await getCartKey(req);
 
-    db.prepare(`DELETE FROM cart_items WHERE ${key.field} = ? AND plant_id = ?`).run(key.value, plantId);
+    await supabase.from('cart_items').delete().eq(key.field, key.value).eq('plant_id', plantId);
 
-    const updatedCart = fetchCartResponse(key);
+    const updatedCart = await fetchCartResponse(key);
     res.json({ message: 'Item removed from cart', ...updatedCart });
   } catch (err: any) {
     console.error('[API Route Error] DELETE /cart/remove/:plantId:', err);
@@ -174,19 +166,19 @@ router.delete('/cart/remove/:plantId', optionalAuth, (req: AuthRequest, res: Res
 });
 
 // DELETE /api/cart/:plantId
-router.delete('/cart/:plantId', optionalAuth, (req: AuthRequest, res: Response) => {
+router.delete('/cart/:plantId', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { plantId } = req.params;
-    const key = getCartKey(req);
+    const key = await getCartKey(req);
 
     if (plantId === 'clear') {
-      db.prepare(`DELETE FROM cart_items WHERE ${key.field} = ?`).run(key.value);
+      await supabase.from('cart_items').delete().eq(key.field, key.value);
       return res.json({ message: 'Cart cleared', items: [], totalAmount: 0 });
     }
 
-    db.prepare(`DELETE FROM cart_items WHERE ${key.field} = ? AND plant_id = ?`).run(key.value, plantId);
+    await supabase.from('cart_items').delete().eq(key.field, key.value).eq('plant_id', plantId);
 
-    const updatedCart = fetchCartResponse(key);
+    const updatedCart = await fetchCartResponse(key);
     res.json({ message: 'Item removed from cart', ...updatedCart });
   } catch (err: any) {
     console.error('[API Route Error] DELETE /cart/:plantId:', err);

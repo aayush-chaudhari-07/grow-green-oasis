@@ -1,7 +1,7 @@
 import express, { type Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { db } from '../db/database.js';
+import { supabase } from '../db/database.js';
 import { authenticateToken, type AuthRequest } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -28,7 +28,7 @@ router.post('/register', async (req: AuthRequest, res: Response) => {
     }
 
     // Check duplicate
-    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(cleanEmail);
+    const { data: existing } = await supabase.from('users').select('id').eq('email', cleanEmail).maybeSingle();
     if (existing) {
       return res.status(400).json({ error: 'An account with this email already exists' });
     }
@@ -37,9 +37,18 @@ router.post('/register', async (req: AuthRequest, res: Response) => {
     const password_hash = await bcrypt.hash(String(password), 10);
     const role = 'user';
 
-    db.prepare('INSERT INTO users (id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)').run(
-      id, cleanName, cleanEmail, password_hash, role
-    );
+    const { error: insertErr } = await supabase.from('users').insert({
+      id,
+      name: cleanName,
+      email: cleanEmail,
+      password_hash,
+      role
+    });
+
+    if (insertErr) {
+      console.error('[Supabase Auth Register Error]', insertErr);
+      return res.status(500).json({ error: insertErr.message || 'Failed to create user record' });
+    }
 
     const token = jwt.sign(
       { id, email: cleanEmail, role, name: cleanName },
@@ -67,9 +76,9 @@ router.post('/login', async (req: AuthRequest, res: Response) => {
     }
 
     const cleanEmail = String(email).toLowerCase().trim();
-    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(cleanEmail) as any;
+    const { data: user, error: fetchErr } = await supabase.from('users').select('*').eq('email', cleanEmail).maybeSingle();
 
-    if (!user) {
+    if (fetchErr || !user) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
@@ -106,13 +115,13 @@ router.post('/logout', (_req: AuthRequest, res: Response) => {
 });
 
 // GET /api/auth/me
-router.get('/me', authenticateToken, (req: AuthRequest, res: Response) => {
+router.get('/me', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return res.status(401).json({ error: 'Not authenticated' });
     }
 
-    const user = db.prepare('SELECT id, name, email, phone, role, created_at FROM users WHERE id = ?').get(req.user.id);
+    const { data: user } = await supabase.from('users').select('id, name, email, phone, role, created_at').eq('id', req.user.id).maybeSingle();
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }

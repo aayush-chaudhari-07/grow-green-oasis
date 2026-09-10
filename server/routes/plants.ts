@@ -1,59 +1,60 @@
 import express, { type Response } from 'express';
-import { db } from '../db/database.js';
+import { supabase } from '../db/database.js';
 import { authenticateToken, type AuthRequest } from '../middleware/auth.js';
 
 const router = express.Router();
 
 // GET /api/categories
-router.get('/categories', (_req, res: Response) => {
+router.get('/categories', async (_req, res: Response) => {
   try {
-    const categories = db.prepare('SELECT * FROM categories').all();
-    res.json(categories);
+    const { data: categories, error } = await supabase.from('categories').select('*');
+    if (error) throw error;
+    res.json(categories || []);
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to fetch categories' });
   }
 });
 
 // GET /api/plants
-router.get('/plants', (req, res: Response) => {
+router.get('/plants', async (req, res: Response) => {
   try {
     const { category, search, sort } = req.query;
 
-    let query = 'SELECT * FROM plants WHERE 1=1';
-    const params: any[] = [];
+    let query = supabase.from('plants').select('*');
 
     if (category && category !== 'all') {
-      query += ' AND category = ?';
-      params.push(category);
+      query = query.eq('category', String(category));
     }
 
     if (search) {
-      query += ' AND (name LIKE ? OR description LIKE ? OR specialty LIKE ?)';
       const term = `%${search}%`;
-      params.push(term, term, term);
+      query = query.or(`name.ilike.${term},description.ilike.${term},specialty.ilike.${term}`);
     }
 
     if (sort === 'price-asc') {
-      query += ' ORDER BY price ASC';
+      query = query.order('price', { ascending: true });
     } else if (sort === 'price-desc') {
-      query += ' ORDER BY price DESC';
+      query = query.order('price', { ascending: false });
     } else if (sort === 'name') {
-      query += ' ORDER BY name ASC';
+      query = query.order('name', { ascending: true });
     } else {
-      query += ' ORDER BY created_at DESC';
+      query = query.order('id', { ascending: true });
     }
 
-    const plants = db.prepare(query).all(...params).map((p: any) => ({
+    const { data, error } = await query;
+    if (error) throw error;
+
+    const plants = (data || []).map((p: any) => ({
       id: p.id,
       name: p.name,
       image: p.image,
       category: p.category,
-      price: p.price,
-      originalPrice: p.original_price || undefined,
+      price: Number(p.price),
+      originalPrice: p.original_price ? Number(p.original_price) : undefined,
       description: p.description,
       growTime: p.grow_time,
       specialty: p.specialty,
-      discount: p.discount || undefined,
+      discount: p.discount ? Number(p.discount) : undefined,
       stock: p.stock
     }));
 
@@ -64,10 +65,10 @@ router.get('/plants', (req, res: Response) => {
 });
 
 // GET /api/plants/:id
-router.get('/plants/:id', (req, res: Response) => {
+router.get('/plants/:id', async (req, res: Response) => {
   try {
-    const plant = db.prepare('SELECT * FROM plants WHERE id = ?').get(req.params.id) as any;
-    if (!plant) {
+    const { data: plant, error } = await supabase.from('plants').select('*').eq('id', req.params.id).maybeSingle();
+    if (error || !plant) {
       return res.status(404).json({ error: 'Plant not found' });
     }
 
@@ -76,12 +77,12 @@ router.get('/plants/:id', (req, res: Response) => {
       name: plant.name,
       image: plant.image,
       category: plant.category,
-      price: plant.price,
-      originalPrice: plant.original_price || undefined,
+      price: Number(plant.price),
+      originalPrice: plant.original_price ? Number(plant.original_price) : undefined,
       description: plant.description,
       growTime: plant.grow_time,
       specialty: plant.specialty,
-      discount: plant.discount || undefined,
+      discount: plant.discount ? Number(plant.discount) : undefined,
       stock: plant.stock
     });
   } catch (err: any) {
@@ -90,7 +91,7 @@ router.get('/plants/:id', (req, res: Response) => {
 });
 
 // POST /api/plants (Admin only)
-router.post('/plants', authenticateToken, (req: AuthRequest, res: Response) => {
+router.post('/plants', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     if (req.user?.role !== 'admin') {
       return res.status(403).json({ error: 'Admin access required' });
@@ -103,10 +104,21 @@ router.post('/plants', authenticateToken, (req: AuthRequest, res: Response) => {
     }
 
     const id = 'p_' + Date.now();
-    db.prepare(`
-      INSERT INTO plants (id, name, image, category, price, original_price, description, grow_time, specialty, discount, stock)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, name, image, category, price, originalPrice || null, description, growTime, specialty, discount || null, stock || 50);
+    const { error } = await supabase.from('plants').insert({
+      id,
+      name,
+      image,
+      category,
+      price,
+      original_price: originalPrice || null,
+      description,
+      grow_time: growTime,
+      specialty,
+      discount: discount || null,
+      stock: stock || 50
+    });
+
+    if (error) throw error;
 
     res.status(201).json({ id, message: 'Plant created successfully' });
   } catch (err: any) {
