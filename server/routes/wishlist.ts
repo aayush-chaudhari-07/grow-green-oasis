@@ -11,21 +11,16 @@ router.get('/wishlist', authenticateToken, async (req: AuthRequest, res: Respons
       return res.status(401).json({ error: 'Authentication required' });
     }
 
-    const { data: rows, error } = await supabase.from('wishlist').select('id, created_at, plant_id').eq('user_id', req.user.id).order('created_at', { ascending: false });
+    const { data: rows, error } = await supabase
+      .from('wishlist')
+      .select('id, created_at, plant_id, plants(id, name, image, category, price, original_price, description, grow_time, specialty, discount)')
+      .eq('user_id', req.user.id)
+      .order('created_at', { ascending: false });
 
     if (error) throw error;
 
-    if (!rows || rows.length === 0) {
-      return res.json({ items: [] });
-    }
-
-    const plantIds = rows.map((w) => w.plant_id);
-    const { data: plants } = await supabase.from('plants').select('id, name, image, category, price, original_price, description, grow_time, specialty, discount').in('id', plantIds);
-
-    const plantMap = new Map<string, any>((plants || []).map((p: any) => [p.id, p]));
-
-    const items = rows.map((r) => {
-      const plant = plantMap.get(r.plant_id) || {};
+    const items = (rows || []).map((r: any) => {
+      const plant = (Array.isArray(r.plants) ? r.plants[0] : r.plants) || {};
       return {
         id: plant.id || r.plant_id,
         name: plant.name,

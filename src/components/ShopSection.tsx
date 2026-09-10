@@ -80,14 +80,27 @@ const ShopSection = () => {
         </motion.div>
 
         {/* Plant Grid */}
-        <motion.div
-          layout
-          className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8"
-        >
-          {filtered.map((plant) => (
-            <PlantCard key={plant.id} plant={plant} />
-          ))}
-        </motion.div>
+        {loading && plantsList.length === 0 ? (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+            {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+              <div key={i} className="bg-popover/50 rounded-2xl overflow-hidden animate-pulse p-4 flex flex-col gap-4">
+                <div className="w-full h-56 bg-muted/60 rounded-xl" />
+                <div className="h-4 w-1/3 bg-muted/60 rounded" />
+                <div className="h-6 w-2/3 bg-muted/60 rounded" />
+                <div className="h-5 w-1/4 bg-muted/60 rounded mt-auto" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <motion.div
+            layout
+            className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8"
+          >
+            {filtered.map((plant) => (
+              <PlantCard key={plant.id} plant={plant} />
+            ))}
+          </motion.div>
+        )}
       </div>
     </section>
   );
