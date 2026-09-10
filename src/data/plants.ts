@@ -1,16 +1,3 @@
-import monstera from "@/assets/plants/monstera.jpg";
-import snakePlant from "@/assets/plants/snake-plant.jpg";
-import pothos from "@/assets/plants/pothos.jpg";
-import lavender from "@/assets/plants/lavender.jpg";
-import succulent from "@/assets/plants/succulent.jpg";
-import peaceLily from "@/assets/plants/peace-lily.jpg";
-import fiddleLeaf from "@/assets/plants/fiddle-leaf.jpg";
-import aloeVera from "@/assets/plants/aloe-vera.jpg";
-import basil from "@/assets/plants/basil.jpg";
-import rubberPlant from "@/assets/plants/rubber-plant.jpg";
-import cactus from "@/assets/plants/cactus.jpg";
-import rosemary from "@/assets/plants/rosemary.jpg";
-
 export type Plant = {
   id: string;
   name: string;
@@ -37,7 +24,7 @@ export const plants: Plant[] = [
   {
     id: "1",
     name: "Monstera Deliciosa",
-    image: monstera,
+    image: "/plants/monstera.jpg",
     category: "indoor",
     price: 29.99,
     originalPrice: 39.99,
@@ -49,7 +36,7 @@ export const plants: Plant[] = [
   {
     id: "2",
     name: "Snake Plant",
-    image: snakePlant,
+    image: "/plants/snake-plant.jpg",
     category: "indoor",
     price: 19.99,
     description: "Nearly indestructible and perfect for beginners. Thrives in low light and purifies air while you sleep.",
@@ -59,7 +46,7 @@ export const plants: Plant[] = [
   {
     id: "3",
     name: "Golden Pothos",
-    image: pothos,
+    image: "/plants/pothos.jpg",
     category: "indoor",
     price: 14.99,
     originalPrice: 19.99,
@@ -71,7 +58,7 @@ export const plants: Plant[] = [
   {
     id: "4",
     name: "Lavender",
-    image: lavender,
+    image: "/plants/lavender.jpg",
     category: "flowering",
     price: 22.99,
     description: "Fragrant purple blooms that attract pollinators and bring calm to your garden. Great for aromatherapy.",
@@ -81,7 +68,7 @@ export const plants: Plant[] = [
   {
     id: "5",
     name: "Echeveria Succulent",
-    image: succulent,
+    image: "/plants/succulent.jpg",
     category: "succulents",
     price: 9.99,
     originalPrice: 14.99,
@@ -93,7 +80,7 @@ export const plants: Plant[] = [
   {
     id: "6",
     name: "Peace Lily",
-    image: peaceLily,
+    image: "/plants/peace-lily.jpg",
     category: "flowering",
     price: 24.99,
     description: "Elegant white blooms that symbolize peace and harmony. One of the best air-purifying plants.",
@@ -103,7 +90,7 @@ export const plants: Plant[] = [
   {
     id: "7",
     name: "Fiddle Leaf Fig",
-    image: fiddleLeaf,
+    image: "/plants/fiddle-leaf.jpg",
     category: "indoor",
     price: 44.99,
     originalPrice: 59.99,
@@ -115,7 +102,7 @@ export const plants: Plant[] = [
   {
     id: "8",
     name: "Aloe Vera",
-    image: aloeVera,
+    image: "/plants/aloe-vera.jpg",
     category: "succulents",
     price: 12.99,
     description: "A medicinal marvel that soothes burns and purifies air. Easy to grow and incredibly useful.",
@@ -125,7 +112,7 @@ export const plants: Plant[] = [
   {
     id: "9",
     name: "Sweet Basil",
-    image: basil,
+    image: "/plants/basil.jpg",
     category: "herbs",
     price: 7.99,
     description: "Fresh, aromatic leaves perfect for cooking. Grows quickly and fills your kitchen with amazing scent.",
@@ -135,7 +122,7 @@ export const plants: Plant[] = [
   {
     id: "10",
     name: "Rubber Plant",
-    image: rubberPlant,
+    image: "/plants/rubber-plant.jpg",
     category: "indoor",
     price: 34.99,
     description: "Glossy, dark green leaves that add a bold, tropical feel to any space. Very forgiving plant.",
@@ -145,7 +132,7 @@ export const plants: Plant[] = [
   {
     id: "11",
     name: "Mixed Cactus Set",
-    image: cactus,
+    image: "/plants/cactus.jpg",
     category: "succulents",
     price: 18.99,
     originalPrice: 24.99,
@@ -157,7 +144,7 @@ export const plants: Plant[] = [
   {
     id: "12",
     name: "Rosemary",
-    image: rosemary,
+    image: "/plants/rosemary.jpg",
     category: "herbs",
     price: 10.99,
     description: "Fragrant evergreen herb used in cooking and aromatherapy. Hardy and drought-tolerant once established.",

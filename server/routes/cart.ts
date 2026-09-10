@@ -86,10 +86,11 @@ router.post('/cart/add', optionalAuth, async (req: AuthRequest, res: Response) =
       return res.status(400).json({ error: 'Plant ID is required' });
     }
 
-    let { data: plant } = await supabase.from('plants').select('id').eq('id', plantId).maybeSingle();
+    const cleanPlantId = String(plantId);
+    let { data: plant } = await supabase.from('plants').select('id').eq('id', cleanPlantId).maybeSingle();
     if (!plant) {
       await seedDatabase();
-      const reFetch = await supabase.from('plants').select('id').eq('id', plantId).maybeSingle();
+      const reFetch = await supabase.from('plants').select('id').eq('id', cleanPlantId).maybeSingle();
       plant = reFetch.data;
     }
 
