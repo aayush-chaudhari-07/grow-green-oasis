@@ -1,5 +1,6 @@
 import path from 'node:path';
 import fs from 'node:fs';
+import os from 'node:os';
 
 // Universal database interface supporting both node:sqlite and fallback memory/JSON store
 export interface DatabaseInterface {
@@ -29,7 +30,7 @@ class InMemoryStore {
   }
 
   private getTmpFilePath() {
-    return path.join('/tmp', 'grow_green_store.json');
+    return path.join(os.tmpdir(), 'grow_green_store.json');
   }
 
   private loadFromDisk() {
@@ -400,7 +401,7 @@ const tryLoadNodeSqlite = (): DatabaseInterface | null => {
     // Try accessing DatabaseSync from node:sqlite
     const sqlite = eval('require("node:sqlite")');
     if (sqlite && sqlite.DatabaseSync) {
-      const tmpPath = path.join('/tmp', 'grow_green.db');
+      const tmpPath = path.join(os.tmpdir(), 'grow_green.db');
       const realDb = new sqlite.DatabaseSync(tmpPath);
       try {
         realDb.exec('PRAGMA journal_mode = WAL;');
@@ -421,12 +422,12 @@ export const initDatabase = () => {
     db.exec(`
       CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT, email TEXT, password_hash TEXT, role TEXT);
       CREATE TABLE IF NOT EXISTS categories (id TEXT PRIMARY KEY, name TEXT, icon TEXT);
-      CREATE TABLE IF NOT EXISTS plants (id TEXT PRIMARY KEY, name TEXT, price REAL);
-      CREATE TABLE IF NOT EXISTS cart_items (id TEXT PRIMARY KEY);
-      CREATE TABLE IF NOT EXISTS orders (id TEXT PRIMARY KEY);
-      CREATE TABLE IF NOT EXISTS order_items (id TEXT PRIMARY KEY);
-      CREATE TABLE IF NOT EXISTS wishlist (id TEXT PRIMARY KEY);
-      CREATE TABLE IF NOT EXISTS addresses (id TEXT PRIMARY KEY);
+      CREATE TABLE IF NOT EXISTS plants (id TEXT PRIMARY KEY, name TEXT, image TEXT, category TEXT, price REAL, original_price REAL, description TEXT, grow_time TEXT, specialty TEXT, discount REAL, stock INTEGER);
+      CREATE TABLE IF NOT EXISTS cart_items (id TEXT PRIMARY KEY, user_id TEXT, session_id TEXT, plant_id TEXT, quantity INTEGER);
+      CREATE TABLE IF NOT EXISTS orders (id TEXT PRIMARY KEY, user_id TEXT, customer_name TEXT, customer_email TEXT, customer_phone TEXT, shipping_address TEXT, city TEXT, state TEXT, pincode TEXT, payment_method TEXT, payment_status TEXT, total_amount REAL, status TEXT, created_at TEXT);
+      CREATE TABLE IF NOT EXISTS order_items (id TEXT PRIMARY KEY, order_id TEXT, plant_id TEXT, plant_name TEXT, image TEXT, quantity INTEGER, price REAL);
+      CREATE TABLE IF NOT EXISTS wishlist (id TEXT PRIMARY KEY, user_id TEXT, plant_id TEXT, created_at TEXT);
+      CREATE TABLE IF NOT EXISTS addresses (id TEXT PRIMARY KEY, user_id TEXT, name TEXT, phone TEXT, address_line1 TEXT, address_line2 TEXT, city TEXT, state TEXT, pincode TEXT, is_default INTEGER, created_at TEXT);
     `);
   } catch (_e) {}
   console.log('Database initialized successfully.');
