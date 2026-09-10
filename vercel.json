@@ -1,6 +1,11 @@
 {
+  "functions": {
+    "api/index.ts": {
+      "includeFiles": ["dist-server/**"]
+    }
+  },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/index.js" },
+    { "source": "/api/(.*)", "destination": "/api" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
