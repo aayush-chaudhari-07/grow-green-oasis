@@ -78,7 +78,16 @@ router.post('/login', async (req: AuthRequest, res: Response) => {
     const cleanEmail = String(email).toLowerCase().trim();
     const { data: user, error: fetchErr } = await supabase.from('users').select('*').eq('email', cleanEmail).maybeSingle();
 
-    if (fetchErr || !user) {
+    if (fetchErr) {
+      console.error('[Supabase Auth Error]', fetchErr);
+      if (fetchErr.message?.includes('schema cache') || fetchErr.message?.includes('users')) {
+        return res.status(500).json({
+          error: 'Supabase database tables are not created yet. Please run server/db/schema.sql in your Supabase SQL Editor.'
+        });
+      }
+    }
+
+    if (!user) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 

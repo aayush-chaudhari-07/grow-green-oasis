@@ -1,5 +1,6 @@
 import express, { type Response } from 'express';
 import { supabase } from '../db/database.js';
+import { seedDatabase } from '../db/seed.js';
 import { authenticateToken, type AuthRequest } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -19,6 +20,15 @@ router.get('/categories', async (_req, res: Response) => {
 router.get('/plants', async (req, res: Response) => {
   try {
     const { category, search, sort } = req.query;
+
+    const { count, error: countErr } = await supabase.from('plants').select('*', { count: 'exact', head: true });
+    if (countErr && countErr.message?.includes('schema cache')) {
+      return res.status(500).json({ error: 'Supabase tables not created yet. Please run server/db/schema.sql in your Supabase SQL Editor.' });
+    }
+
+    if (!count || count === 0) {
+      await seedDatabase();
+    }
 
     let query = supabase.from('plants').select('*');
 

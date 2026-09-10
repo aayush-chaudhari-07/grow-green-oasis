@@ -1,5 +1,6 @@
 import express, { type Response } from 'express';
 import { supabase } from '../db/database.js';
+import { seedDatabase } from '../db/seed.js';
 import { optionalAuth, type AuthRequest } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -85,7 +86,13 @@ router.post('/cart/add', optionalAuth, async (req: AuthRequest, res: Response) =
       return res.status(400).json({ error: 'Plant ID is required' });
     }
 
-    const { data: plant } = await supabase.from('plants').select('id').eq('id', plantId).maybeSingle();
+    let { data: plant } = await supabase.from('plants').select('id').eq('id', plantId).maybeSingle();
+    if (!plant) {
+      await seedDatabase();
+      const reFetch = await supabase.from('plants').select('id').eq('id', plantId).maybeSingle();
+      plant = reFetch.data;
+    }
+
     if (!plant) {
       return res.status(404).json({ error: 'Plant not found' });
     }
