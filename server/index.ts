@@ -1,14 +1,14 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { seedDatabase } from './db/seed';
-import authRoutes from './routes/auth';
-import plantRoutes from './routes/plants';
-import cartRoutes from './routes/cart';
-import orderRoutes from './routes/orders';
-import statsRoutes from './routes/stats';
-import wishlistRoutes from './routes/wishlist';
-import userRoutes from './routes/user';
+import { seedDatabase } from './db/seed.js';
+import authRoutes from './routes/auth.js';
+import plantRoutes from './routes/plants.js';
+import cartRoutes from './routes/cart.js';
+import orderRoutes from './routes/orders.js';
+import statsRoutes from './routes/stats.js';
+import wishlistRoutes from './routes/wishlist.js';
+import userRoutes from './routes/user.js';
 
 dotenv.config();
 

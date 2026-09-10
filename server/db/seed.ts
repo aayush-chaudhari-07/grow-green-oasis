@@ -1,5 +1,5 @@
-import { db, initDatabase } from './database';
-import { plants } from '../../src/data/plants';
+import { db, initDatabase } from './database.js';
+import { plants } from '../../src/data/plants.js';
 import bcrypt from 'bcryptjs';
 
 export const seedDatabase = async () => {
